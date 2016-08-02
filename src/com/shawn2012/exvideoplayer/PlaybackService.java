@@ -325,9 +325,13 @@ public class PlaybackService extends Service implements IVLCVout.Callback {
     }
 
     public void setPosition(float pos) {
-        if (mSeekable) {
+        if (mSeekable && isSeekable()) {
             mMediaPlayer.setPosition(pos);
         }
+    }
+
+    public boolean isSeekable() {
+        return mMediaPlayer.isSeekable() && mSeekable;
     }
 
     public int getAudioTracksCount() {

@@ -1,15 +1,14 @@
 package com.shawn2012.exvideoplayer.videoplay;
 
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
+import java.util.Locale;
+
 import org.videolan.libvlc.IVLCVout;
-import org.videolan.libvlc.IVLCVout.Callback;
 import org.videolan.libvlc.LibVLC;
-import org.videolan.libvlc.Media;
 import org.videolan.libvlc.Media.Event;
-import org.videolan.libvlc.MediaPlayer;
 import org.videolan.vlc.media.MediaWrapper;
 import org.videolan.vlc.util.VLCInstance;
-import org.videolan.vlc.util.VLCOptions;
-
 import com.shawn2012.exvideoplayer.PlaybackService;
 import com.shawn2012.exvideoplayer.PlaybackServiceActivity;
 import com.shawn2012.exvideoplayer.R;
@@ -24,12 +23,22 @@ import android.os.Looper;
 import android.os.Message;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.view.Window;
+import android.view.WindowManager;
+import android.widget.ImageButton;
+import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
+import android.widget.SeekBar;
+import android.widget.TextView;
 
 public class VideoPlayerActivity extends AppCompatActivity
         implements IVLCVout.Callback, PlaybackService.Callback,
-        PlaybackService.Client.Callback {
+        PlaybackService.Client.Callback, OnClickListener {
     private static final String LOG_TAG = "VLC/VideoPlayActivity";
 
     public final static String PLAY_EXTRA_ITEM_LOCATION = "item_location";
@@ -65,6 +74,28 @@ public class VideoPlayerActivity extends AppCompatActivity
     private static final int RESET_BACK_LOCK = 6;
     private static final int CHECK_VIDEO_TRACKS = 7;
     private static final int LOADING_ANIMATION = 8;
+    
+    private static final int SHOW_PROGRESS_UI = 9;
+    private static final int HIDE_OVERLAY = 10;
+    
+    private RelativeLayout mTitleLayout;
+    private LinearLayout mBottomOverlayLayout;
+    
+    private TextView mTitleView;
+    private TextView mDurationView;
+    private TextView mTimeView;
+    
+    private SurfaceView mSubTitleSurface;
+    
+    private SeekBar mSeekBar;
+    private ImageButton mLockBtn;
+    private ImageButton mPlayPauseBtn;
+    private ImageButton mForwardBtn;
+    private ImageButton mBackwardBtn;
+    private ImageButton mSizeBtn;
+    
+    private LinearLayout mLoaddingLayout;
+    private TextView mBufferView;
 
     public static void startOpened(Context context, Uri uri,
             int openedPosition) {
@@ -104,10 +135,163 @@ public class VideoPlayerActivity extends AppCompatActivity
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        getSupportActionBar().hide();
+
         setContentView(R.layout.activity_video_play);
 
         mSurfaceView = (SurfaceView) findViewById(R.id.video_view);
         mSurfaceHolder = mSurfaceView.getHolder();
+        
+        initViews();
+    }
+
+    private void initViews() {
+        mTitleLayout = (RelativeLayout) findViewById(R.id.player_title_layout);
+        mBottomOverlayLayout = (LinearLayout) findViewById(R.id.player_bottom_overlay_layout);
+        
+        mTitleView = (TextView) findViewById(R.id.player_title);
+        mTimeView = (TextView) findViewById(R.id.player_time);
+        mDurationView = (TextView) findViewById(R.id.player_duration);
+        
+        mSeekBar = (SeekBar) findViewById(R.id.player_seekbar);
+        
+        mLockBtn = (ImageButton) findViewById(R.id.player_lock);
+        mLockBtn.setOnClickListener(this);
+        mBackwardBtn = (ImageButton) findViewById(R.id.player_backward);
+        mBackwardBtn.setOnClickListener(this);
+        mPlayPauseBtn = (ImageButton) findViewById(R.id.player_play_pause);
+        mPlayPauseBtn.setOnClickListener(this);
+        mForwardBtn = (ImageButton) findViewById(R.id.player_forward);
+        mForwardBtn.setOnClickListener(this);
+        mSizeBtn = (ImageButton) findViewById(R.id.player_size);
+        mSizeBtn.setOnClickListener(this);
+        
+        mLoaddingLayout = (LinearLayout) findViewById(R.id.player_loading_layout);
+        mBufferView = (TextView) findViewById(R.id.player_buffer);
+    }
+
+    @Override
+    public void onClick(View v) {
+        switch (v.getId()) {
+        case R.id.player_lock:
+            
+            break;
+        case R.id.player_backward:
+            onBackwardClicked();
+            break;
+        case R.id.player_play_pause:
+            onPlayPauseClicked();
+            break;
+        case R.id.player_forward:
+            onForwardClicked();
+            break;
+        case R.id.player_size:
+            
+            break;
+        }
+    }
+
+    private void onBackwardClicked() {
+        seek(-10000);
+    }
+
+    private void seek(int delta) {
+        long length = mService.getLength();
+        if (length < 0) {
+            return;
+        }
+
+        long position = mService.getTime() + delta;
+        if (position < 0) {
+            position = 0;
+        } else if (position > mService.getLength()) {
+            position = mService.getLength();
+        }
+
+        mService.setTime(position);
+    }
+
+    private void onPlayPauseClicked() {
+        if (mService.isPlaying()) {
+            mService.pause();
+            mPlayPauseBtn.setBackgroundResource(R.drawable.ic_play);
+        } else {
+            mService.play();
+            mPlayPauseBtn.setBackgroundResource(R.drawable.ic_pause);
+        }
+    }
+
+    private void onForwardClicked() {
+        seek(10000);
+    }
+
+    private String millisToString(long millis, boolean text) {
+        boolean negative = millis < 0;
+        millis = java.lang.Math.abs(millis);
+        int mini_sec = (int) millis % 1000;
+        millis /= 1000;
+        int sec = (int) (millis % 60);
+        millis /= 60;
+        int min = (int) (millis % 60);
+        millis /= 60;
+        int hours = (int) millis;
+
+        String time;
+        DecimalFormat format = (DecimalFormat) NumberFormat.getInstance(Locale.US);
+        format.applyPattern("00");
+
+        DecimalFormat format2 = (DecimalFormat) NumberFormat.getInstance(Locale.US);
+        format2.applyPattern("000");
+        if (text) {
+            if (millis > 0)
+                time = (negative ? "-" : "") + hours + "h" + format.format(min) + "min";
+            else if (min > 0)
+                time = (negative ? "-" : "") + min + "min";
+            else
+                time = (negative ? "-" : "") + sec + "s";
+        } else {
+            if (millis > 0)
+                time = (negative ? "-" : "") + hours + ":" + format.format(min) + ":" + format.format(sec) + ":" + format2.format(mini_sec);
+            else
+                time = (negative ? "-" : "") + min + ":" + format.format(sec) + ":" + format2.format(mini_sec);
+        }
+        return time;
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        if (event.getAction() == MotionEvent.ACTION_UP) {
+            if (mBottomOverlayLayout.getVisibility() != View.VISIBLE) {
+                showOverlay();
+            } else {
+                hideOverlay();
+            }
+        }
+        return false;
+    }
+
+    private void showOverlay() {
+        mTitleLayout.setVisibility(View.VISIBLE);
+        mBottomOverlayLayout.setVisibility(View.VISIBLE);
+        mHandler.sendEmptyMessage(SHOW_PROGRESS_UI);
+        mHandler.removeMessages(HIDE_OVERLAY);
+        mHandler.sendEmptyMessageDelayed(HIDE_OVERLAY, 5 * 1000);
+    }
+
+    private void hideOverlay() {
+        mTitleLayout.setVisibility(View.GONE);
+        mBottomOverlayLayout.setVisibility(View.GONE);
+        mHandler.removeMessages(SHOW_PROGRESS_UI);
+    }
+
+    private void showLoading() {
+        mLoaddingLayout.setVisibility(View.VISIBLE);
+    }
+
+    private void hideLoading() {
+        mLoaddingLayout.setVisibility(View.GONE);
     }
 
     private LibVLC libVlc() {
@@ -187,7 +371,6 @@ public class VideoPlayerActivity extends AppCompatActivity
         super.onResume();
 
         startPlayback();
-
     }
 
     private void startPlayback() {
@@ -208,6 +391,14 @@ public class VideoPlayerActivity extends AppCompatActivity
         mService.setVideoTrackEnabled(true);
 
         loadMedia();
+
+        mSurfaceView.setKeepScreenOn(true);
+
+        boolean seekable = mService.isSeekable();
+        if (seekable) {
+            mBackwardBtn.setVisibility(View.VISIBLE);
+            mForwardBtn.setVisibility(View.VISIBLE);
+        }
     }
 
     private void stopPlayback() {
@@ -233,6 +424,8 @@ public class VideoPlayerActivity extends AppCompatActivity
         } else {
             mService.pause();
         }
+        
+        mSurfaceView.setKeepScreenOn(false);
     }
 
     @Override
